@@ -15,6 +15,7 @@
 #include <functional>
 #include <cctype>
 #include "resource.h"
+#include "v2_data.h"
 #include "sdk/webview2/build/native/include/WebView2.h"
 
 using Microsoft::WRL::ComPtr;
@@ -164,6 +165,9 @@ constexpr int kForwardId = 0x66;
 constexpr int kReloadId = 0x67;
 constexpr int kHomeId = 0x68;
 constexpr int kHistoryId = 0x69;
+constexpr int kBookmarksId = 0x6b;
+constexpr int kSettingsId = 0x6c;
+constexpr int kPrivateId = 0x6d;
 constexpr int kAddressId = 0x6a;
 constexpr int kTabStripId = 0x70;
 constexpr int kTabWidth = 174;
@@ -175,6 +179,9 @@ struct BrowserTab {
     std::wstring lastUri = L"about:blank";
     bool internalPage = true;
     bool historyPage = false;
+    bool bookmarksPage = false;
+    bool settingsPage = false;
+    bool privateMode = false;
 };
 
 struct HistoryEntry {
@@ -189,6 +196,9 @@ HWND g_forward = nullptr;
 HWND g_reload = nullptr;
 HWND g_home = nullptr;
 HWND g_historyButton = nullptr;
+HWND g_bookmarksButton = nullptr;
+HWND g_settingsButton = nullptr;
+HWND g_privateButton = nullptr;
 HWND g_address = nullptr;
 WNDPROC g_oldEditProc = nullptr;
 ComPtr<ICoreWebView2Environment> g_environment;
@@ -196,6 +206,9 @@ std::vector<std::shared_ptr<BrowserTab>> g_tabs;
 std::vector<HistoryEntry> g_history;
 int g_activeTab = -1;
 bool g_darkMode = false;
+std::wstring g_dataDirectory;
+v2data::V2Settings g_settings;
+std::vector<v2data::V2Bookmark> g_bookmarks;
 
 const wchar_t* kDashboardHtmlDark = LR"HTML(<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Pane Browser</title><style>
 html,body{height:100%;}body{margin:0;background:#202124;color:#f1f3f4;font-family:Segoe UI,system-ui,sans-serif}.shell{height:100%;display:flex;align-items:center;justify-content:center;padding:24px;box-sizing:border-box}.content{width:min(640px,100%);display:flex;flex-direction:column;align-items:center;gap:24px}h1{margin:0;font-size:30px;font-weight:600;letter-spacing:.1px;color:#f1f3f4}.search{width:100%;height:66px;display:flex;align-items:center;background:#303134;border:1px solid #5f6368;border-radius:4px;box-shadow:0 2px 6px rgba(0,0,0,.35);box-sizing:border-box}.search input{flex:1;min-width:0;height:100%;padding:0 20px;border:0;outline:0;background:transparent;color:#f1f3f4;font:inherit;font-size:18px}.search input::placeholder{color:#9aa0a6}.search input[type=search]::-webkit-search-cancel-button{-webkit-appearance:none;display:none}.search button{width:62px;height:100%;display:grid;place-items:center;border:0;background:transparent;color:#bdc1c6;cursor:pointer}.search button:hover{color:#f1f3f4}.search svg{width:24px;height:24px;fill:none;stroke:currentColor;stroke-width:2.5;stroke-linecap:round}
@@ -206,6 +219,8 @@ html,body{height:100%;}body{margin:0;background:#ffffff;color:#202124;font-famil
 </style></head><body><main class="shell"><section class="content"><h1>Pane Browser</h1><form class="search" onsubmit="submitSearch();return false;"><input id="q" type="search" autocomplete="off" autofocus><button type="submit" aria-label="Search"><svg viewBox="0 0 24 24"><circle cx="10.8" cy="10.8" r="6.8"></circle><path d="M16 16l5 5"></path></svg></button></form></section></main><script>function submitSearch(){const q=document.getElementById('q').value.trim();if(!q)return;const uri='https://www.startpage.com/sp/search?query='+encodeURIComponent(q);if(window.chrome&&chrome.webview)chrome.webview.postMessage('search:'+q);else window.location.href=uri;}</script></body></html>)HTML";
 
 bool DetectWindowsDarkMode() {
+    if (g_settings.theme == L"dark") return true;
+    if (g_settings.theme == L"light") return false;
     HKEY key = nullptr;
     DWORD value = 1;
     DWORD size = sizeof(value);
@@ -240,7 +255,7 @@ void ApplyControlTheme() {
     auto setTheme = reinterpret_cast<SetWindowThemeFn>(GetProcAddress(theme, "SetWindowTheme"));
     if (setTheme) {
         const wchar_t* visualStyle = g_darkMode ? L"DarkMode_Explorer" : nullptr;
-        HWND controls[] = {g_tabStrip, g_back, g_forward, g_reload, g_home, g_historyButton, g_address};
+        HWND controls[] = {g_tabStrip, g_back, g_forward, g_reload, g_home, g_historyButton, g_bookmarksButton, g_settingsButton, g_privateButton, g_address};
         for (HWND control : controls) {
             if (control) setTheme(control, visualStyle, nullptr);
         }
@@ -274,7 +289,34 @@ void DrawToolbarButton(const DRAWITEMSTRUCT* item) {
     DrawTextW(item->hDC, label, -1, &textRect, DT_SINGLELINE | DT_CENTER | DT_VCENTER);
 }
 
+void SavePersistentData() {
+    if (g_dataDirectory.empty()) return;
+    if (g_settings.persistHistory) {
+        std::vector<v2data::V2HistoryEntry> out;
+        for (const auto& e : g_history) out.push_back({e.uri, e.time});
+        v2data::SaveHistory(out, g_dataDirectory);
+    }
+    v2data::SaveBookmarks(g_bookmarks, g_dataDirectory);
+    v2data::SaveSettings(g_settings, g_dataDirectory);
+}
+
+void LoadPersistentData() {
+    g_dataDirectory = v2data::DataDirectory();
+    v2data::LoadSettings(g_settings, g_dataDirectory);
+    std::vector<v2data::V2HistoryEntry> history;
+    if (g_settings.persistHistory) {
+        v2data::LoadHistory(history, g_dataDirectory);
+        for (const auto& e : history) g_history.push_back({e.uri, e.time});
+    }
+    v2data::LoadBookmarks(g_bookmarks, g_dataDirectory);
+}
+
 std::wstring GetWebViewUserDataFolder() {
+    std::wstring root = g_dataDirectory.empty() ? v2data::DataDirectory() : g_dataDirectory;
+    std::wstring webviewFolder = v2data::Join(root, L"WebView2");
+    CreateDirectoryW(webviewFolder.c_str(), nullptr);
+    return webviewFolder;
+    /*
     wchar_t modulePath[32768] = {};
     DWORD length = GetModuleFileNameW(nullptr, modulePath, static_cast<DWORD>(sizeof(modulePath) / sizeof(modulePath[0])));
     if (!length || length >= sizeof(modulePath) / sizeof(modulePath[0])) return L"";
@@ -283,6 +325,7 @@ std::wstring GetWebViewUserDataFolder() {
     std::wstring directory = slash == std::wstring::npos ? L"." : fullPath.substr(0, slash + 1);
     std::wstring executableName = slash == std::wstring::npos ? fullPath : fullPath.substr(slash + 1);
     return directory + executableName + L".WebView2";
+    */
 }
 
 std::wstring UrlEncode(const std::wstring& input) {
@@ -345,8 +388,9 @@ ICoreWebView2* ActiveWebView() {
 }
 
 std::wstring TabTitle(const BrowserTab& tab) {
-    if (tab.lastUri.empty() || tab.lastUri == L"about:blank") return L"New Tab";
-    std::wstring title = tab.lastUri;
+    if (tab.lastUri.empty() || tab.lastUri == L"about:blank") return tab.privateMode ? L"Private Tab" : L"New Tab";
+    std::wstring title = tab.privateMode ? L"Private - " : L"";
+    title += tab.lastUri;
     if (title.size() > 22) title = title.substr(0, 19) + L"...";
     return title;
 }
@@ -370,8 +414,10 @@ void SetTabLabel(BrowserTab* tab) {
 }
 
 void ResizeChildren();
-void CreateNewTab(const std::wstring& initialUri);
+void CreateNewTab(const std::wstring& initialUri, bool privateMode = false);
 void CloseTab(int index);
+void ShowBookmarks();
+void ShowSettings();
 void SetActiveTab(int index);
 
 LRESULT CALLBACK TabStripProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
@@ -418,6 +464,7 @@ LRESULT CALLBACK TabStripProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             SelectObject(dc, oldPen);
             DeleteObject(whitePen);
         }
+        if (!g_settings.tabsEnabled) { SelectObject(dc, oldFont); EndPaint(hwnd, &ps); return 0; }
         int plusLeft = static_cast<int>(g_tabs.size()) * kTabWidth + 6;
         RECT plusRect{plusLeft, 2, plusLeft + 36, 31};
         HBRUSH plusBrush = CreateSolidBrush(g_darkMode ? RGB(63, 65, 71) : RGB(225, 225, 225));
@@ -448,7 +495,7 @@ LRESULT CALLBACK TabStripProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             }
         }
         int plusLeft = static_cast<int>(g_tabs.size()) * kTabWidth + 6;
-        if (x >= plusLeft && x < plusLeft + 42 && y >= 0 && y < 32) CreateNewTab(L"dashboard");
+        if (g_settings.tabsEnabled && x >= plusLeft && x < plusLeft + 42 && y >= 0 && y < 32) CreateNewTab(L"dashboard", false);
         return 0;
     }
     }
@@ -474,6 +521,9 @@ void CloseTab(int index) {
         tab->lastUri = L"about:blank";
         tab->internalPage = true;
         tab->historyPage = false;
+        tab->bookmarksPage = false;
+        tab->settingsPage = false;
+        tab->privateMode = false;
         if (tab->webview) tab->webview->NavigateToString(DashboardHtml());
         if (g_address) SetWindowTextW(g_address, L"");
         SetTabLabel(tab);
@@ -506,6 +556,14 @@ std::wstring HistoryHost(const std::wstring& uri) {
     return host.empty() ? L"Local page" : host;
 }
 
+void ClearInternalFlags(BrowserTab* tab) {
+    if (!tab) return;
+    tab->internalPage = true;
+    tab->historyPage = false;
+    tab->bookmarksPage = false;
+    tab->settingsPage = false;
+}
+
 std::wstring HistoryLabel(const std::wstring& uri) {
     if (uri == L"about:blank") return L"Dashboard";
     if (uri.find(L"www.startpage.com/sp/search?query=") != std::wstring::npos) return L"Startpage Search";
@@ -525,14 +583,40 @@ void RecordCommittedNavigation(BrowserTab* tab) {
     if (tab->internalPage && !externalNavigation) return;
     tab->internalPage = false;
     tab->historyPage = false;
+    tab->bookmarksPage = false;
+    tab->settingsPage = false;
     tab->lastUri = uri;
-    if (!tab->internalPage) {
+    if (!tab->privateMode) {
         g_history.push_back({uri, CurrentTimeLabel()});
+        SavePersistentData();
     }
     if (tab == ActiveTab()) {
         SetWindowTextW(g_address, uri.c_str());
         SetTabLabel(tab);
     }
+}
+
+std::wstring BookmarksHtml() {
+    const wchar_t* bg = g_darkMode ? L"#202124" : L"#f8f9fa";
+    const wchar_t* card = g_darkMode ? L"#292a2d" : L"#ffffff";
+    const wchar_t* text = g_darkMode ? L"#f1f3f4" : L"#202124";
+    const wchar_t* muted = g_darkMode ? L"#bdc1c6" : L"#5f6368";
+    std::wstring html = L"<!doctype html><html><head><meta charset='utf-8'><style>body{margin:0;background:" + std::wstring(bg) + L";color:" + text + L";font:16px Segoe UI,system-ui,sans-serif}.wrap{max-width:1000px;margin:auto;padding:36px}.card{background:" + card + L";padding:28px;border-radius:16px;box-shadow:0 4px 24px rgba(0,0,0,.15)}h1{margin:0 0 20px;font-size:34px}button{border:0;border-radius:6px;padding:9px 13px;margin:4px;cursor:pointer;background:" + std::wstring(g_darkMode ? L"#3c4043" : L"#f1f3f4") + L";color:" + text + L"}a{color:" + std::wstring(g_darkMode ? L"#8ab4f8" : L"#1967d2") + L";font-size:17px}.item{padding:14px 0;border-bottom:1px solid " + std::wstring(g_darkMode ? L"#3c4043" : L"#e8eaed") + L"}.uri{color:" + muted + L";font-size:14px;margin-top:4px}</style></head><body><main class='wrap'><section class='card'><h1>Bookmarks</h1><button onclick=\"addCurrent()\">Add current page</button><div id='items'>";
+    if (g_bookmarks.empty()) html += L"<p style='color:" + std::wstring(muted) + L"'>No bookmarks yet.</p>";
+    for (int i = static_cast<int>(g_bookmarks.size()) - 1; i >= 0; --i) {
+        const auto& b = g_bookmarks[static_cast<size_t>(i)];
+        html += L"<div class='item'><a href='#' onclick=\"openBookmark(" + std::to_wstring(i) + L");return false;\">" + HtmlEscape(b.title) + L"</a><div class='uri'>" + HtmlEscape(b.uri) + L"</div><button onclick=\"deleteBookmark(" + std::to_wstring(i) + L")\">Delete</button></div>";
+    }
+    html += LR"HTML(</div></section></main><script>const send=m=>window.chrome&&chrome.webview&&chrome.webview.postMessage(m);function addCurrent(){send('bookmark-add')}function openBookmark(i){send('bookmark-open:'+i)}function deleteBookmark(i){send('bookmark-delete:'+i)}</script></body></html>)HTML";
+    return html;
+}
+
+std::wstring SettingsHtml() {
+    const wchar_t* bg = g_darkMode ? L"#202124" : L"#f8f9fa";
+    const wchar_t* card = g_darkMode ? L"#292a2d" : L"#ffffff";
+    const wchar_t* text = g_darkMode ? L"#f1f3f4" : L"#202124";
+    std::wstring html = L"<!doctype html><html><head><meta charset='utf-8'><style>body{margin:0;background:" + std::wstring(bg) + L";color:" + text + L";font:16px Segoe UI,system-ui,sans-serif}.wrap{max-width:900px;margin:auto;padding:36px}.card{background:" + card + L";padding:28px;border-radius:16px;box-shadow:0 4px 24px rgba(0,0,0,.15)}h1{font-size:34px;margin:0 0 24px}.setting{display:flex;justify-content:space-between;align-items:center;padding:17px 0;border-bottom:1px solid " + std::wstring(g_darkMode ? L"#3c4043" : L"#e8eaed") + L"}select,input{font:inherit;padding:8px;border-radius:6px}</style></head><body><main class='wrap'><section class='card'><h1>Settings</h1><div class='setting'><span>Theme</span><select onchange=\"send('settings-theme:'+this.value)\"><option value='system'" + (g_settings.theme == L"system" ? L" selected" : L"") + L">System</option><option value='light'" + (g_settings.theme == L"light" ? L" selected" : L"") + L">Light</option><option value='dark'" + (g_settings.theme == L"dark" ? L" selected" : L"") + L">Dark</option></select></div><div class='setting'><span>Enable tabs</span><input type='checkbox' " + (g_settings.tabsEnabled ? L"checked" : L"") + L" onchange=\"send('settings-tabs:'+(this.checked?'1':'0'))\"></div><div class='setting'><span>Persistent history</span><input type='checkbox' " + (g_settings.persistHistory ? L"checked" : L"") + L" onchange=\"send('settings-history:'+(this.checked?'1':'0'))\"></div><div class='setting'><span>Custom title bar</span><input type='checkbox' " + (g_settings.customTitleBar ? L"checked" : L"") + L" onchange=\"send('settings-titlebar:'+(this.checked?'1':'0'))\"></div></section></main><script>const send=m=>window.chrome&&chrome.webview&&chrome.webview.postMessage(m)</script></body></html>";
+    return html;
 }
 
 std::wstring HistoryHtml() {
@@ -597,15 +681,29 @@ std::vector<int> ParseHistoryIndices(const std::wstring& value) {
     return indices;
 }
 
+bool ParseBookmarkIndex(const std::wstring& value, int& index) {
+    try { size_t consumed = 0; index = std::stoi(value, &consumed); return consumed == value.size() && index >= 0 && index < static_cast<int>(g_bookmarks.size()); }
+    catch (...) { return false; }
+}
+
+void RefreshBookmarkPage() { BrowserTab* tab = ActiveTab(); if (!tab || !tab->webview) return; tab->internalPage = true; tab->historyPage = false; tab->bookmarksPage = true; tab->settingsPage = false; tab->webview->NavigateToString(BookmarksHtml().c_str()); }
+void RefreshSettingsPage() { BrowserTab* tab = ActiveTab(); if (!tab || !tab->webview) return; tab->internalPage = true; tab->historyPage = false; tab->bookmarksPage = false; tab->settingsPage = true; tab->webview->NavigateToString(SettingsHtml().c_str()); }
+void ApplyCustomTitleBar();
+
 void RefreshHistoryPage() {
     BrowserTab* tab = ActiveTab();
     ICoreWebView2* webview = ActiveWebView();
     if (!tab || !webview) return;
     tab->internalPage = true;
     tab->historyPage = true;
+    tab->bookmarksPage = false;
+    tab->settingsPage = false;
     std::wstring html = HistoryHtml();
     webview->NavigateToString(html.c_str());
 }
+
+void RefreshRuntimeTheme();
+void ApplyCustomTitleBar();
 
 void HandleHistoryMessage(BrowserTab* tab, ICoreWebView2WebMessageReceivedEventArgs* args) {
     if (!tab || !args) return;
@@ -640,9 +738,43 @@ void HandleHistoryMessage(BrowserTab* tab, ICoreWebView2WebMessageReceivedEventA
     }
 
 
+    if (message == L"bookmark-add") {
+        if (tab && !tab->privateMode && tab->lastUri.rfind(L"http", 0) == 0) {
+            g_bookmarks.push_back({HistoryLabel(tab->lastUri), tab->lastUri});
+            SavePersistentData();
+        }
+        RefreshBookmarkPage();
+        return;
+    }
+    if (message.rfind(L"bookmark-open:", 0) == 0) {
+        int index = -1;
+        if (ParseBookmarkIndex(message.substr(14), index)) {
+            tab->privateMode = false; ClearInternalFlags(tab); tab->webview->Navigate(g_bookmarks[static_cast<size_t>(index)].uri.c_str());
+        }
+        return;
+    }
+    if (message.rfind(L"bookmark-delete:", 0) == 0) {
+        int index = -1;
+        if (ParseBookmarkIndex(message.substr(16), index)) g_bookmarks.erase(g_bookmarks.begin() + index);
+        SavePersistentData(); RefreshBookmarkPage(); return;
+    }
+    if (message.rfind(L"settings-theme:", 0) == 0) {
+        g_settings.theme = message.substr(15); SavePersistentData(); RefreshRuntimeTheme(); RefreshSettingsPage(); return;
+    }
+    if (message.rfind(L"settings-tabs:", 0) == 0) {
+        g_settings.tabsEnabled = message.substr(14) != L"0"; SavePersistentData(); ResizeChildren(); InvalidateTabs(); RefreshSettingsPage(); return;
+    }
+    if (message.rfind(L"settings-history:", 0) == 0) {
+        g_settings.persistHistory = message.substr(17) != L"0"; SavePersistentData(); RefreshSettingsPage(); return;
+    }
+    if (message.rfind(L"settings-titlebar:", 0) == 0) {
+        g_settings.customTitleBar = message.substr(18) != L"0"; SavePersistentData(); ApplyCustomTitleBar(); RefreshSettingsPage(); return;
+    }
+
     if (message.rfind(L"delete-selected:", 0) == 0) {
         std::vector<int> indices = ParseHistoryIndices(message.substr(16));
         for (int index : indices) g_history.erase(g_history.begin() + index);
+        SavePersistentData();
         RefreshHistoryPage();
         return;
     }
@@ -650,6 +782,7 @@ void HandleHistoryMessage(BrowserTab* tab, ICoreWebView2WebMessageReceivedEventA
     if (message.rfind(L"delete:", 0) == 0) {
         int index = -1;
         if (ParseHistoryIndex(message.substr(7), index)) g_history.erase(g_history.begin() + index);
+        SavePersistentData();
         RefreshHistoryPage();
     }
 }
@@ -666,6 +799,10 @@ void NavigateFromAddressBar() {
     }
 }
 
+void ShowBookmarks() { BrowserTab* tab = ActiveTab(); if (!tab || !tab->webview) return; SetWindowTextW(g_address, L""); RefreshBookmarkPage(); }
+void ShowSettings() { BrowserTab* tab = ActiveTab(); if (!tab || !tab->webview) return; SetWindowTextW(g_address, L""); RefreshSettingsPage(); }
+void ShowPrivate() { if (g_settings.tabsEnabled) CreateNewTab(L"dashboard", true); else { BrowserTab* tab = ActiveTab(); if (tab) { tab->privateMode = true; tab->lastUri = L"about:blank"; ClearInternalFlags(tab); tab->webview->NavigateToString(DashboardHtml()); SetTabLabel(tab); SetWindowTextW(g_address, L""); } } }
+
 void ShowHistory() {
     BrowserTab* tab = ActiveTab();
     ICoreWebView2* webview = ActiveWebView();
@@ -673,6 +810,8 @@ void ShowHistory() {
     SetWindowTextW(g_address, L"");
     tab->internalPage = true;
     tab->historyPage = true;
+    tab->bookmarksPage = false;
+    tab->settingsPage = false;
     std::wstring html = HistoryHtml();
     webview->NavigateToString(html.c_str());
 }
@@ -683,6 +822,8 @@ void ShowHome() {
     tab->lastUri = L"about:blank";
     tab->internalPage = true;
     tab->historyPage = false;
+    tab->bookmarksPage = false;
+    tab->settingsPage = false;
     SetTabLabel(tab);
     SetWindowTextW(g_address, L"");
     tab->webview->NavigateToString(DashboardHtml());
@@ -693,17 +834,25 @@ void ResizeChildren() {
     RECT rc{};
     GetClientRect(g_main, &rc);
     int width = rc.right - rc.left;
-    MoveWindow(g_tabStrip, 0, 0, std::max(200, width), 32, TRUE);
-    MoveWindow(g_back, 5, 36, 24, 30, TRUE);
-    MoveWindow(g_forward, 33, 36, 24, 30, TRUE);
-    MoveWindow(g_reload, 61, 36, 58, 30, TRUE);
-    MoveWindow(g_home, 124, 36, 48, 30, TRUE);
-    MoveWindow(g_historyButton, 177, 36, 60, 30, TRUE);
-    MoveWindow(g_address, 242, 36, std::max<LONG>(120, width - 245), 30, TRUE);
+    const int titleHeight = g_settings.customTitleBar ? 32 : 0;
+    const int tabHeight = g_settings.tabsEnabled ? 32 : 0;
+    ShowWindow(g_tabStrip, g_settings.tabsEnabled ? SW_SHOW : SW_HIDE);
+    const int toolbarY = titleHeight + tabHeight + 4;
+    const int webTop = toolbarY + 34;
+    MoveWindow(g_tabStrip, 0, titleHeight, std::max(200, width), 32, TRUE);
+    MoveWindow(g_back, 5, toolbarY, 24, 30, TRUE);
+    MoveWindow(g_forward, 33, toolbarY, 24, 30, TRUE);
+    MoveWindow(g_reload, 61, toolbarY, 58, 30, TRUE);
+    MoveWindow(g_home, 124, toolbarY, 48, 30, TRUE);
+    MoveWindow(g_historyButton, 177, toolbarY, 60, 30, TRUE);
+    MoveWindow(g_bookmarksButton, 242, toolbarY, 78, 30, TRUE);
+    MoveWindow(g_settingsButton, 323, toolbarY, 72, 30, TRUE);
+    MoveWindow(g_privateButton, 398, toolbarY, 68, 30, TRUE);
+    MoveWindow(g_address, 469, toolbarY, std::max<LONG>(120, width - 472), 30, TRUE);
     for (size_t i = 0; i < g_tabs.size(); ++i) {
         if (g_tabs[i]->controller) {
             RECT webBounds = rc;
-            webBounds.top = 70;
+            webBounds.top = webTop;
             g_tabs[i]->controller->put_Bounds(webBounds);
             g_tabs[i]->controller->put_IsVisible(static_cast<int>(i) == g_activeTab ? TRUE : FALSE);
         }
@@ -718,9 +867,10 @@ LRESULT CALLBACK AddressProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
     return g_oldEditProc ? CallWindowProcW(g_oldEditProc, hwnd, msg, wp, lp) : DefWindowProcW(hwnd, msg, wp, lp);
 }
 
-void CreateNewTab(const std::wstring& initialUri) {
+void CreateNewTab(const std::wstring& initialUri, bool privateMode) {
     if (!g_environment || !g_tabStrip) return;
     auto tab = std::make_shared<BrowserTab>();
+    tab->privateMode = privateMode;
     int index = static_cast<int>(g_tabs.size());
     g_tabs.push_back(tab);
     SetActiveTab(index);
@@ -760,8 +910,8 @@ void CreateNewTab(const std::wstring& initialUri) {
                         std::wstring uri(requestedUri);
                         CoTaskMemFree(requestedUri);
                         if (!uri.empty()) {
-                            tab->internalPage = false;
-                            tab->historyPage = false;
+                            ClearInternalFlags(tab.get());
+                            tab->privateMode = tab->privateMode;
                             sender->Navigate(uri.c_str());
                         }
                     }
@@ -777,7 +927,16 @@ void CreateNewTab(const std::wstring& initialUri) {
             }
             return tab->webview->Navigate(initialUri.c_str());
         });
-    HRESULT hr = g_environment->CreateCoreWebView2Controller(g_main, controllerCallback.Get());
+    HRESULT hr = E_FAIL;
+    ComPtr<ICoreWebView2Environment10> env10;
+    if (SUCCEEDED(g_environment->QueryInterface(IID_ICoreWebView2Environment10, reinterpret_cast<void**>(env10.GetAddressOf()))) && env10) {
+        ComPtr<ICoreWebView2ControllerOptions> options;
+        if (SUCCEEDED(env10->CreateCoreWebView2ControllerOptions(&options)) && options) {
+            options->put_IsInPrivateModeEnabled(privateMode ? TRUE : FALSE);
+            hr = env10->CreateCoreWebView2ControllerWithOptions(g_main, options.Get(), controllerCallback.Get());
+        }
+    }
+    if (FAILED(hr)) hr = g_environment->CreateCoreWebView2Controller(g_main, controllerCallback.Get());
     controllerCallback.Get()->Release();
     if (FAILED(hr)) {
         int failedIndex = FindTab(tab.get());
@@ -809,11 +968,12 @@ HRESULT InitializeWebView() {
 }
 
 void RefreshRuntimeTheme() {
+    LoadPersistentData();
     g_darkMode = DetectWindowsDarkMode();
     ApplyWindowTheme(g_main);
     ApplyControlTheme();
     InvalidateTabs();
-    HWND controls[] = {g_tabStrip, g_back, g_forward, g_reload, g_home, g_historyButton, g_address};
+    HWND controls[] = {g_tabStrip, g_back, g_forward, g_reload, g_home, g_historyButton, g_bookmarksButton, g_settingsButton, g_privateButton, g_address};
     for (HWND control : controls) {
         if (control) InvalidateRect(control, nullptr, TRUE);
     }
@@ -821,6 +981,10 @@ void RefreshRuntimeTheme() {
         if (!tab->webview) continue;
         if (tab->historyPage) {
             tab->webview->NavigateToString(HistoryHtml().c_str());
+        } else if (tab->bookmarksPage) {
+            tab->webview->NavigateToString(BookmarksHtml().c_str());
+        } else if (tab->settingsPage) {
+            tab->webview->NavigateToString(SettingsHtml().c_str());
         } else if (tab->lastUri == L"about:blank") {
             tab->webview->NavigateToString(DashboardHtml());
         }
@@ -831,8 +995,43 @@ void RefreshRuntimeTheme() {
     }
 }
 
+void ApplyCustomTitleBar() {
+    if (!g_main) return;
+    LONG_PTR style = GetWindowLongPtrW(g_main, GWL_STYLE);
+    if (g_settings.customTitleBar) {
+        style &= ~static_cast<LONG_PTR>(WS_CAPTION | WS_SYSMENU);
+        style |= WS_THICKFRAME | WS_MINIMIZEBOX | WS_MAXIMIZEBOX;
+    } else {
+        style |= WS_CAPTION | WS_SYSMENU;
+    }
+    SetWindowLongPtrW(g_main, GWL_STYLE, style);
+    SetWindowPos(g_main, nullptr, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_FRAMECHANGED);
+    ApplyWindowTheme(g_main);
+    ResizeChildren();
+    InvalidateRect(g_main, nullptr, TRUE);
+}
+
 LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
     switch (msg) {
+    case WM_PAINT: {
+        if (g_settings.customTitleBar) {
+            PAINTSTRUCT ps{}; HDC dc = BeginPaint(hwnd, &ps); RECT r{}; GetClientRect(hwnd, &r);
+            RECT title{0, 0, r.right, 32}; HBRUSH b = CreateSolidBrush(g_darkMode ? RGB(28,30,35) : RGB(255,255,255)); FillRect(dc, &title, b); DeleteObject(b);
+            SetBkMode(dc, TRANSPARENT); SetTextColor(dc, g_darkMode ? RGB(255,255,255) : RGB(0,0,0));
+            RECT text{14, 0, r.right - 150, 32}; DrawTextW(dc, L"Pane Browser", -1, &text, DT_SINGLELINE | DT_VCENTER | DT_LEFT);
+            SetTextColor(dc, g_darkMode ? RGB(220,220,220) : RGB(60,60,60));
+            RECT buttons{r.right - 138, 0, r.right, 32}; DrawTextW(dc, L"—    □    ×", -1, &buttons, DT_SINGLELINE | DT_VCENTER | DT_CENTER);
+            EndPaint(hwnd, &ps); return 0;
+        }
+        break;
+    }
+    case WM_LBUTTONDOWN:
+        if (g_settings.customTitleBar) {
+            int x = GET_X_LPARAM(lp), y = GET_Y_LPARAM(lp); RECT r{}; GetClientRect(hwnd, &r);
+            if (y < 32 && x >= r.right - 138) { if (x >= r.right - 46) DestroyWindow(hwnd); else if (x >= r.right - 92) ShowWindow(hwnd, IsZoomed(hwnd) ? SW_RESTORE : SW_MAXIMIZE); else ShowWindow(hwnd, SW_MINIMIZE); return 0; }
+            if (y < 32) { ReleaseCapture(); SendMessageW(hwnd, WM_NCLBUTTONDOWN, HTCAPTION, 0); return 0; }
+        }
+        break;
     case WM_ERASEBKGND: {
         RECT client{};
         GetClientRect(hwnd, &client);
@@ -876,9 +1075,13 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         case kReloadId: if (ActiveWebView()) ActiveWebView()->Reload(); return 0;
         case kHomeId: ShowHome(); return 0;
         case kHistoryId: ShowHistory(); return 0;
+        case kBookmarksId: ShowBookmarks(); return 0;
+        case kSettingsId: ShowSettings(); return 0;
+        case kPrivateId: ShowPrivate(); return 0;
         }
         break;
     case WM_DESTROY:
+        SavePersistentData();
         PostQuitMessage(0);
         return 0;
     }
@@ -935,12 +1138,18 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int show) {
                              g_main, reinterpret_cast<HMENU>(kHomeId), instance, nullptr);
     g_historyButton = CreateWindowExW(0, L"BUTTON", L"History", WS_CHILD | WS_VISIBLE | BS_OWNERDRAW, 0, 0, 0, 0,
                                       g_main, reinterpret_cast<HMENU>(kHistoryId), instance, nullptr);
+    g_bookmarksButton = CreateWindowExW(0, L"BUTTON", L"Bookmarks", WS_CHILD | WS_VISIBLE | BS_OWNERDRAW, 0, 0, 0, 0,
+                                      g_main, reinterpret_cast<HMENU>(kBookmarksId), instance, nullptr);
+    g_settingsButton = CreateWindowExW(0, L"BUTTON", L"Settings", WS_CHILD | WS_VISIBLE | BS_OWNERDRAW, 0, 0, 0, 0,
+                                      g_main, reinterpret_cast<HMENU>(kSettingsId), instance, nullptr);
+    g_privateButton = CreateWindowExW(0, L"BUTTON", L"Private", WS_CHILD | WS_VISIBLE | BS_OWNERDRAW, 0, 0, 0, 0,
+                                      g_main, reinterpret_cast<HMENU>(kPrivateId), instance, nullptr);
     g_address = CreateWindowExW(WS_EX_CLIENTEDGE, L"EDIT", L"", WS_CHILD | WS_VISIBLE | ES_AUTOHSCROLL,
                                 0, 0, 0, 0, g_main, reinterpret_cast<HMENU>(kAddressId), instance, nullptr);
     g_oldEditProc = reinterpret_cast<WNDPROC>(SetWindowLongPtrW(
         g_address, GWLP_WNDPROC, reinterpret_cast<LONG_PTR>(AddressProc)));
-    ApplyControlTheme();
-
+        ApplyControlTheme();
+    ApplyCustomTitleBar();
     ShowWindow(g_main, show);
     ResizeChildren();
     UpdateWindow(g_main);
