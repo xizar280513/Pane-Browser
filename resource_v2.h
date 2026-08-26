@@ -1,4 +1,0 @@
-#pragma once
-#define IDI_PANE_BROWSER 101
-#define IDR_PANE_BROWSER_CORE 201
-#define IDR_WEBVIEW2_LOADER 202
