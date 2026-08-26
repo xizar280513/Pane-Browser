@@ -6,8 +6,8 @@ The project is organized around two separate editions:
 
 | Edition | Purpose |
 | --- | --- |
-| **Regular** | A full everyday browser with profiles, local persistence, privacy controls, recovery tools, productivity features, and installer support. |
-| **MiniEdition** | A deliberately minimal single-tab browser with temporary per-run browser data and a single portable executable. |
+| **Regular Edition** | A full everyday browser with profiles, local persistence, privacy controls, recovery tools, productivity features, and installer support. |
+| **Mini Edition** | A deliberately minimal single-tab browser with temporary per-run browser data and a single portable executable. |
 
 The editions have separate source trees and different data models. Pane Browser uses its own implementation and does not claim to contain or reproduce proprietary source code from an unrelated product.
 
@@ -25,7 +25,7 @@ The editions have separate source trees and different data models. Pane Browser 
 
 Pane Browser v5.0.0 is primarily a quality, stability, privacy, and usability refinement release. It preserves the broad v4 feature set while correcting navigation and lifecycle edge cases.
 
-### Regular navigation correction
+### Regular Edition navigation correction
 
 User-initiated ordinary links from search results, including `target="_blank"` links from Startpage, now navigate in the current opener tab. This prevents a normal result such as a YouTube link from unexpectedly opening another Pane Browser tab or window.
 
@@ -33,15 +33,15 @@ Authentication and blank bootstrap popups remain separate managed WebView2 child
 
 ### Fullscreen behavior
 
-Regular native browser fullscreen is toggled with `F11`. While fullscreen is active, the tab strip, address bar, Back, Forward, Refresh, Home, and other browser controls are hidden so the WebView can use the complete window. Pressing `F11` again restores the previous window style, placement, toolbar controls, and address-bar content.
+Regular Edition native browser fullscreen is toggled with `F11`. While fullscreen is active, the tab strip, address bar, Back, Forward, Refresh, Home, and other browser controls are hidden so the WebView can use the complete window. Pressing `F11` again restores the previous window style, placement, toolbar controls, and address-bar content.
 
 HTML video fullscreen is connected to WebView2 `ContainsFullScreenElementChanged`. When a page enters video fullscreen, the active WebView expands and the browser chrome is hidden. Leaving fullscreen restores the previous native layout.
 
-MiniEdition handles F11 through the WebView2 controller's `AcceleratorKeyPressed` event as well as native window routing. F11 therefore works when focus is inside Home, the address bar, or an ordinary website.
+Mini Edition handles F11 through the WebView2 controller's `AcceleratorKeyPressed` event as well as native window routing. F11 therefore works when focus is inside Home, the address bar, or an ordinary website.
 
-## Regular edition features
+## Regular Edition features
 
-Regular is intended for everyday Windows browsing while keeping browser-owned data local to the selected profile.
+Regular Edition is intended for everyday Windows browsing while keeping browser-owned data local to the selected profile.
 
 | Area | Features |
 | --- | --- |
@@ -57,7 +57,7 @@ Regular is intended for everyday Windows browsing while keeping browser-owned da
 | Recovery | Session Restore for eligible normal tabs, closed-tab reopening, WebView recovery, and workspace restoration. |
 | Data management | Clear Browsing Data, protected Personal profile, eligible profile deletion, backup/export, and permanent Delete All Data. |
 
-### Regular profile and privacy model
+### Regular Edition profile and privacy model
 
 Normal profile data is stored locally in the Pane Browser application-data area. Profile-scoped application records and named WebView2 profile contexts separate normal profiles from one another. Normal cookies and local website data remain available for everyday sign-in convenience.
 
@@ -78,7 +78,7 @@ Private tabs use isolated WebView2 data. Private and authentication tabs are exc
 
 Private browsing is not anonymity software. Websites, network operators, Windows administrators, crash services, DNS infrastructure, and other software on the device may still observe or retain information outside the application's local records.
 
-### Regular stability refinements
+### Regular Edition stability refinements
 
 v5.0.0 resets settings and relevant in-memory collections before loading another profile so missing or incomplete files cannot leave stale values from a previous profile. Disabling Persistent History or Session Restore clears the relevant local records and active memory immediately, including session metadata.
 
@@ -88,19 +88,19 @@ Internal-page state is normalized during transitions among History, Settings, Do
 
 Delete Profile protects the Personal profile and is limited to eligible normal profiles. Delete All Data is a separate destructive action with confirmation and root validation. It permanently removes the approved Pane Browser data root without touching external download folders or creating a recovery backup.
 
-## MiniEdition
+## Mini Edition
 
-MiniEdition is a separate minimal browser shell. It includes one tab, an address bar, Back, Forward, Refresh, Home, direct URL navigation, Startpage search, native browser fullscreen, and HTML video fullscreen.
+Mini Edition is a separate minimal browser shell. It includes one tab, an address bar, Back, Forward, Refresh, Home, direct URL navigation, Startpage search, native browser fullscreen, and HTML video fullscreen.
 
 It intentionally excludes History, persistent History, Bookmarks, Incognito/private mode, profile management, downloads management, Settings, theme switching, tab strips, multi-tab support, Session Restore, workspaces, extensions, and an installer.
 
-Each MiniEdition run creates a randomly named temporary WebView2 User Data Folder. It does not use the normal Regular profile root and does not intentionally save application-owned History, bookmarks, settings, session records, or profiles. Its single-file executable embeds the minimal browser core and loader payload, so no separate loader DLL is required beside the executable.
+Each Mini Edition run creates a randomly named temporary WebView2 User Data Folder. It does not use the normal Regular Edition profile root and does not intentionally save application-owned History, bookmarks, settings, session records, or profiles. Its single-file executable embeds the minimal browser core and loader payload, so no separate loader DLL is required beside the executable.
 
 Cleanup is best effort. Data retained by websites, Windows, crash services, DNS infrastructure, or the WebView2 Runtime remains outside the application's complete control.
 
 ## Keyboard shortcuts
 
-Regular handles supported shortcuts from the native Windows message path and WebView2 accelerator path so they are intended to work when focus is in the web page, address bar, tab strip, or an internal Pane Browser page.
+Regular Edition handles supported shortcuts from the native Windows message path and WebView2 accelerator path so they are intended to work when focus is in the web page, address bar, tab strip, or an internal Pane Browser page.
 
 | Shortcut | Action |
 | --- | --- |
@@ -123,13 +123,13 @@ Regular handles supported shortcuts from the native Windows message path and Web
 
 ## Distribution
 
-The v5.0.0 Regular release provides a single-file portable launcher, a per-user setup installer, and a source package. MiniEdition provides a single-file portable launcher and a source package.
+The v5.0.0 Regular Edition release provides a single-file portable launcher, a per-user setup installer, and a source package. Mini Edition provides a single-file portable launcher and a source package.
 
 | Package | Intended use |
 | --- | --- |
-| **Regular Portable** | Download one file and run it without manually placing `WebView2Loader.dll` beside the launcher. |
-| **Regular Setup** | Install or upgrade the Regular edition under the user's local application-data directory and create Windows shortcuts. |
-| **MiniEdition Portable** | Run the minimal single-tab edition from one executable. |
+| **Regular Edition Portable** | Download one file and run it without manually placing `WebView2Loader.dll` beside the launcher. |
+| **Regular Edition Setup** | Install or upgrade the Regular Edition under the user's local application-data directory and create Windows shortcuts. |
+| **Mini Edition Portable** | Run the minimal single-tab edition from one executable. |
 | **Source packages** | Inspect or rebuild the corresponding edition. |
 
 Both editions require the Microsoft Edge WebView2 Runtime to be installed on Windows. The launchers embed the WebView2 loader payload, but they do not bundle the WebView2 Runtime itself. The Runtime can be obtained from Microsoft's official [WebView2 download page](https://developer.microsoft.com/microsoft-edge/webview2/).
@@ -142,21 +142,21 @@ Both editions require the Microsoft Edge WebView2 Runtime to be installed on Win
 | **v2.0.0** | Added persistent application data, bookmarks, private browsing, Settings, optional tabs, custom title-bar support, and single-file distribution. |
 | **v3.0.0** | Added Session Restore, Downloads, Find in Page, keyboard shortcuts, context menus, zoom, bookmark import/export, installer upgrade/uninstall, runtime detection, update checking, and additional stability/privacy work. |
 | **v4.0.0** | Added authentication compatibility handling, persistent profiles, managed popups, workspaces, vertical tabs, recovery, permissions, site data controls, Command Palette, per-site settings, Reading Mode, Split View, Quick Notes, privacy modes, backup/export, profile deletion, and Delete All Data. |
-| **v5.0.0** | Refined ordinary same-tab navigation, popup separation, profile/persistence boundaries, privacy exclusions, lifecycle safety, F11/video fullscreen behavior, and MiniEdition-wide F11 routing. |
+| **v5.0.0** | Refined ordinary same-tab navigation, popup separation, profile/persistence boundaries, privacy exclusions, lifecycle safety, F11/video fullscreen behavior, and Mini Edition-wide F11 routing. |
 
 For a release download, use the portable executable for a no-install experience, the setup executable for a per-user installation, and the source archive when inspecting or rebuilding the project.
 
 ## Building from source
 
-### Regular
+### Regular Edition
 
-The Regular source package contains the native browser source, persistence helpers, resource files, launcher and installer sources, build script, project license, and the minimum WebView2 SDK files required by the build.
+The Regular Edition source package contains the native browser source, persistence helpers, resource files, launcher and installer sources, build script, project license, and the minimum WebView2 SDK files required by the build.
 
 ```bash
 ./build_v5.sh
 ```
 
-The Regular build creates:
+The Regular Edition build creates:
 
 ```
 PaneBrowser-v5.0.0-core.exe
@@ -164,15 +164,15 @@ PaneBrowser-v5.0.0-portable.exe
 PaneBrowser-v5.0.0-setup.exe
 ```
 
-### MiniEdition
+### Mini Edition
 
-The MiniEdition source package contains the minimal browser source, single-file launcher sources, resource files, build script, project license, and the minimum WebView2 SDK files required by the build.
+The Mini Edition source package contains the minimal browser source, single-file launcher sources, resource files, build script, project license, and the minimum WebView2 SDK files required by the build.
 
 ```bash
 ./build_v5_mini.sh
 ```
 
-The MiniEdition build creates only:
+The Mini Edition build creates only:
 
 ```
 PaneBrowser-v5.0.0-MiniEdition-portable.exe
@@ -182,7 +182,7 @@ A Windows-oriented MinGW-w64 x64 toolchain, GNU `windres`, the included WebView2
 
 ## Verification and limitations
 
-The v5 source was cross-built as Windows x64 PE32+ targets under Linux. Regular was checked with C++17 compilation, targeted source regression checks, a fail-hard static audit, and clean rebuilding from an extracted source package. MiniEdition was checked with a clean build, a dedicated fullscreen/scope audit, WebView2 accelerator-handler checks, removal of the visible alpha status label, and clean rebuilding from its source package.
+The v5 source was cross-built as Windows x64 PE32+ targets under Linux. Regular Edition was checked with C++17 compilation, targeted source regression checks, a fail-hard static audit, and clean rebuilding from an extracted source package. Mini Edition was checked with a clean build, a dedicated fullscreen/scope audit, WebView2 accelerator-handler checks, removal of the visible alpha status label, and clean rebuilding from its source package.
 
 Static compilation and PE checks cannot replace direct Windows x64 runtime testing. Before broad distribution, test cold startup and close, Startpage result navigation, authentication popups, HTML video fullscreen, F11 from Home and ordinary websites, F11 exit and restoration of the toolbar/address bar, profile switching, cookies, private mode, Session Restore, closed-tab reopening, tab sleeping, Delete Profile, Delete All Data, installer upgrade/uninstall, system theme changes, multi-monitor placement, high-DPI layout, WebView2 Runtime compatibility, and portable cleanup.
 
