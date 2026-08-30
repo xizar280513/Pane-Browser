@@ -1,25 +1,25 @@
-# Pane Browser v1.0.0
+## v1.0.0 — August 25, 2026
 
-## Distribution refinement
+**Short Description:** The first public release of Pane Browser — an independent Windows browser shell built with native Win32 and Microsoft WebView2.
 
-This package preserves the Pane Browser v1.0.0 browser core and introduces a single-file portable distribution.
+**Breaking Changes**
+- None — this is the first release of Pane Browser.
 
-### Portable executable
+**New Features**
+- A minimal Home page with a large search field.
+- Direct URL navigation from Home and the address bar.
+- Startpage search fallback for ordinary text input.
+- Back, Forward, Refresh, Home, and History controls.
+- Multi-tab support with new-tab and close-tab controls.
+- Links that request a new window are opened in the active tab.
+- Session History with search, full URLs, visit times, and Open, Delete, Select all, and Deselect all actions.
+- Windows light/dark theme support with runtime theme refresh.
+- A Pane Browser application icon embedded in the executable.
+- Portable distribution with `WebView2Loader.dll` included beside the executable.
 
-`PaneBrowser-v1.0.0-portable.exe` embeds the v1.0.0 browser core and `WebView2Loader.dll`. The launcher extracts them into a temporary directory only while the browser is running, starts the core application, waits for it to exit, and performs best-effort cleanup.
+**Bug Fixes**
+- None — there is no previous release to compare against.
 
-Users no longer need to download a ZIP and manually keep `WebView2Loader.dll` beside the browser launcher.
-
-### Preserved v1 behavior
-
-The browser core remains the v1.0.0 baseline with native Win32 controls, Microsoft WebView2 rendering, Startpage search fallback, navigation controls, multi-tab browsing, session-only History, Windows theme adaptation, and the Pane Browser icon.
-
-Persistent History, bookmarks, private mode, session restore, Downloads, Settings, and other later capabilities remain part of the v2.0.0 and v3.0.0 release lines. They are not added to this v1 package.
-
-### Requirement
-
-Microsoft WebView2 Runtime must be installed on the target Windows x64 system. The launcher embeds `WebView2Loader.dll`, but it does not bundle the WebView2 Runtime.
-
-### Verification status
-
-The core and launcher are cross-compiled as PE32+ Windows x64 GUI executables. Runtime rendering, WebView2 startup, and temporary-folder cleanup should be verified on a real Windows x64 device before public distribution.
+**Performance / Improvements**
+- A ready-to-use, single-folder portable distribution with no installation process.
+- Note: in this version, History is session-only and is not persisted after the application exits.
