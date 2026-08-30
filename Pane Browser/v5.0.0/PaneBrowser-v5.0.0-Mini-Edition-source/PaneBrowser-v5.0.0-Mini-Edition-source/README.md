@@ -1,50 +1,24 @@
-# Pane Browser v5.0.0 MiniEdition
+## v5.0.0 — August 26, 2026
 
-Pane Browser MiniEdition is a deliberately minimal independent native C++17/Win32/WebView2 browser shell. It is not the Regular Pane Browser v5 product and it does not produce a Regular portable build or an installer.
+**Short Description:** A quality, stability, privacy, and usability refinement release that splits Pane Browser into two independent editions: Regular Edition and Mini Edition.
 
-## Output
+**Breaking Changes**
+- Pane Browser is now split into two editions with separate source trees, data models, and distribution scopes: **Regular Edition** (full feature set) and **Mini Edition** (a minimal single-tab browser with no persistent data).
+- Mini Edition now deliberately excludes History, Bookmarks, private/incognito mode, profile management, downloads, Settings, theme switching, multi-tab support, Session Restore, workspaces, extensions, and an installer.
 
-The build creates only:
+**New Features**
+- Mini Edition: a deliberately minimal and independent single-tab browser shell with an address bar, basic navigation, Startpage search, and both native and HTML video fullscreen.
+- Regular Edition retains the full v4.0.0 feature set (profiles, tab groups/workspaces, privacy modes, Command Palette, etc.) with the addition of the Smart Address Bar and more complete final-URL tracking during navigation.
 
-```text
-PaneBrowser-v5.0.0-MiniEdition-portable.exe
-```
+**Bug Fixes**
+- Navigation fix: ordinary `target="_blank"` links (including a Startpage result that opens YouTube) now navigate in the current opener tab instead of unexpectedly opening a new Pane Browser tab or window. Authentication popups and blank bootstrap popups remain handled separately as managed WebView2 child windows.
+- Settings and related in-memory collections are now reset before loading another profile, preventing stale state from leaking between profiles.
+- Disabling Persistent History or Session Restore now immediately clears the corresponding local records and active memory; session metadata is also removed when restore is disabled.
+- Authentication windows can no longer enter closed-tab recovery or normal session persistence.
+- Tab-sleep callbacks now verify a tab still exists before updating its state, and a transition into private mode (when tabs are disabled) only replaces the normal tab after the private controller has been created successfully.
+- Internal-page flags are normalized during navigation to prevent stale History, Settings, Downloads, Notes, Site Data, Workspace, Command Palette, or Home state.
 
-The final executable is a single-file launcher. It embeds the minimal browser core and the official `WebView2Loader.dll` payload. At runtime it extracts both files only to a temporary folder, runs the browser, waits for it to close, and removes the extracted files. No loader DLL is required beside the final executable. The loader is kept as an embedded runtime payload rather than using the experimental MinGW static-loader shim, because startup reliability is more important than the last few kilobytes.
-
-## Intentionally included
-
-MiniEdition provides one browser tab, an address bar, Back, Forward, Refresh, Home, direct URL navigation, and Startpage search for ordinary text queries. It supports native browser fullscreen with `F11` and handles WebView2 `ContainsFullScreenElementChanged` so HTML video fullscreen can expand the WebView and hide the browser chrome. Press `F11` again to restore the previous window state. Its Home page and native controls follow the Windows Light/Dark application theme at startup and respond to system theme changes while the app is running. It uses the installed Microsoft Edge WebView2 Runtime for rendering.
-
-## Intentionally excluded
-
-MiniEdition has no History UI, no History file, no persistent History, no Bookmarks, no Incognito/private mode, no profile manager, no downloads manager, no settings page, no theme toggle, no tab strip, no multi-tab support, no session restore, no workspace features, no extensions, no installer, and no ordinary `PaneBrowser-v5.0.0-portable.exe` or `PaneBrowser-v5.0.0-setup.exe` output.
-
-## Privacy model
-
-The MiniEdition browser creates a randomly named temporary WebView2 User Data Folder for each run. It does not use the normal Pane Browser `%LOCALAPPDATA%\\Pane Browser` data root and does not intentionally save app-owned History, Bookmarks, settings, session records, or profiles. On normal exit, the core releases its WebView2 objects and removes the temporary browser-data folder with retry logic. This is a best-effort local privacy design, not a guarantee against data retained by websites, the operating system, crash services, DNS infrastructure, or the WebView2 Runtime itself.
-
-Files downloaded by websites are not exposed through a MiniEdition download manager. Any browser-initiated file created by a website or operating system outside the temporary WebView2 folder is outside this app's cleanup scope.
-
-## Requirements
-
-Windows x64 with the Microsoft Edge WebView2 Runtime installed is required. The Runtime is an external prerequisite and is not embedded into the application.
-
-## Build
-
-A MinGW-w64 x64 toolchain and GNU `windres` are required. The source package includes the minimum WebView2 SDK headers, the official x64 `WebView2Loader.dll`, and its import library. The final executable embeds the loader and does not need a separate loader DLL beside it.
-
-```bash
-./build_v5_mini.sh
-./audit_mini_v5.sh
-```
-
-The build script removes intermediate core, object, and resource files and intentionally removes any files named `PaneBrowser-v5.0.0-portable.exe` or `PaneBrowser-v5.0.0-setup.exe` from the project root. The only final executable is the MiniEdition portable file.
-
-## System theme behavior
-
-MiniEdition reads the Windows application-theme preference and applies it to the native window, navigation controls, address bar, and Home page. A Windows theme change is received through the native window message path and applied without adding a theme toggle or persistent settings file.
-
-## Remaining limitations
-
-Runtime behavior has not been tested on Windows inside the current Linux build environment. Authentication behavior, Startpage availability, WebView2 Runtime compatibility, video fullscreen, F11 fullscreen, temporary-folder cleanup, DPI behavior, and navigation edge cases require Windows x64 testing. The project has its own independent source tree and implementation.
+**Performance / Improvements**
+- Native (F11) fullscreen and HTML video fullscreen behavior was refined, including restoring window style, placement, toolbar visibility, and address-bar content after exiting fullscreen.
+- Mini Edition creates a randomly named temporary WebView2 User Data Folder per run and does not persist application-owned data; its executable embeds the browser core and loader payload, so no separate loader DLL is required.
+- Verification: Regular Edition was cross-built as Windows x64 PE32+ targets under Linux and checked with C++17 compilation, source regression assertions, a fail-hard static audit, and a clean rebuild from an extracted source package.
