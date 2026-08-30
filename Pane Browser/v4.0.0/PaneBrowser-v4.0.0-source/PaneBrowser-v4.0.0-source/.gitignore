@@ -1,0 +1,27 @@
+# MinGW and generated resources
+*.exe
+*.dll
+*.lib
+*.o
+*.obj
+*.a
+
+# Generated build outputs
+build/
+dist/
+release/
+*.tmp
+*.new
+
+# Local audit output
+*-audit.txt
+*.log
+
+# Local IDE/editor files
+.vscode/
+.idea/
+*.user
+*.suo
+
+# Runtime data if the source tree is used as a fallback data location
+PaneBrowser.Data/

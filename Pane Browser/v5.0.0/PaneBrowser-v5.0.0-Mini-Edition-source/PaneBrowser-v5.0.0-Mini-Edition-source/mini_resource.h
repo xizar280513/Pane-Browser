@@ -1,0 +1,2 @@
+#define IDR_MINI_CORE 201
+#define IDR_MINI_LOADER 202

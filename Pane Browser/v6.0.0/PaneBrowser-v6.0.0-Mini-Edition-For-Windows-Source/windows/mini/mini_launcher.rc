@@ -1,0 +1,3 @@
+#include "mini_resource.h"
+IDR_MINI_CORE RCDATA "PaneBrowserMiniCore.exe"
+IDR_MINI_LOADER RCDATA "sdk/webview2/build/native/x64/WebView2Loader.dll.lz4"

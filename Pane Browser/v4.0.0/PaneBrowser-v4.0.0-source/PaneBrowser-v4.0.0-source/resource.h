@@ -1,0 +1,1 @@
+#define IDI_PANE_BROWSER 101

@@ -1,0 +1,4 @@
+#include "resource_v2.h"
+IDI_PANE_BROWSER ICON "PaneBrowser.ico"
+IDR_PANE_BROWSER_CORE RCDATA "PaneBrowserCore.exe"
+IDR_WEBVIEW2_LOADER RCDATA "WebView2Loader.dll"

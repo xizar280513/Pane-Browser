@@ -1,0 +1,2 @@
+#include "resource.h"
+IDI_PANE_BROWSER ICON "PaneBrowser.ico"
