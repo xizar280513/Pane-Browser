@@ -1,127 +1,27 @@
-# Pane Browser
+## v3.0.0 — August 26, 2026
 
-Pane Browser is an independent native Windows browser shell built with C++17, Win32, and Microsoft WebView2. The window chrome and tab strip are native controls, while web content is rendered by the WebView2 runtime.
+**Short Description:** A productivity, reliability, and interface refinement release over v2.0.0, covering a toolbar reorganization, a broader search-engine catalog, and multiple security and stability fixes.
 
-## Version 3.0.0
+**Breaking Changes**
+- The main toolbar was reorganized: Back, Forward, Refresh, Home, and the address bar now sit on the left, with a three-dot overflow button at the far right of the address bar containing Find in page, Downloads, Private tab, Settings, Bookmarks, and History. Existing command handlers are reused so there is no duplicate navigation path, but the UI control locations changed from the previous version.
 
-Pane Browser v3.0.0 keeps the v1/v2 navigation model and adds a more complete daily-browsing workflow.
+**New Features**
+- A broad built-in search-engine catalog in Settings: Google, Bing, DuckDuckGo, Brave Search, Startpage, Mojeek, Swisscows, Yahoo, Baidu, Naver, Yandex, Ecosia, Qwant, Seznam, Ask.com, AOL Search, Kagi, MetaGer, SearXNG, You.com, Perplexity, Yep, Sogou, 360 Search, Rambler, Daum, Goo, Excite, Dogpile, Gibiru, and WolframAlpha — plus a Custom URL entry supporting `{query}` or `%s` placeholders.
+- The selected engine is used both for address-bar input and the Home page search flow; the selection and custom URL are saved in `settings.pbs`.
+- A complete keyboard shortcut reference table in Settings (`Ctrl+T`, `Ctrl+W`, `Ctrl+H`, `Ctrl+Shift+T`, and others).
+- Added session restore, Download Manager, Find in page, reopen-closed-tab, context menu, clear browsing data, zoom controls, bookmark HTML import/export, installer upgrade/uninstall support, WebView2 Runtime detection, and optional GitHub update checking.
 
-### Features
+**Bug Fixes**
+- Native/web trust-boundary validation so WebView2 messages are only accepted from Pane Browser's internal `about:blank` pages, preventing external sites from using the internal command channel.
+- History no longer requests Google favicons containing visited hostnames; it now uses a local badge instead.
+- Persistence now validates file-vs-directory paths, uses process-specific temporary filenames, cleans up failed temporary writes, removes stale History/session files when those features are disabled, caps History at 10,000 records, and reports write failures through the Windows debug channel.
+- Query normalization now trims whitespace and treats dotted phrases containing spaces as searches.
+- Reopening a closed tab now respects disabled tab support.
+- Clear browsing data now asks for confirmation and reports asynchronous WebView2 completion or partial failure.
+- Fixed custom title-bar button hit testing, per-monitor DPI awareness fallback, WebView2 initialization failure shutdown handling, COM `QueryInterface`, page-content context menus, portable cleanup retry, and installer atomic extraction/shortcut diagnostics.
+- Fixed global shortcuts so they remain available when focus is in the web page, address bar, tab strip, or internal pages — the dispatcher now checks the main Windows message queue before messages are forwarded to the focused control.
 
-- Direct URL navigation and Startpage search fallback.
-- Back, Forward, Refresh, Home, History, Bookmarks, Downloads, Settings, and Private controls.
-- Multi-tab browsing with close buttons, a new-tab button, an optional tab strip, and reopen-closed-tab support.
-- File-based persistent browsing history with atomic replacement and startup initialization of the data directory.
-- Session restore for normal HTTP(S) tabs. Private tabs are never saved for session restore.
-- Bookmarks with add, open, delete, and HTML import/export.
-- Private tabs backed by WebView2 private controller options. Private navigation is excluded from normal History.
-- Download manager with a Downloads page, a configurable download folder, state tracking, safe filenames, collision avoidance, open-file, and open-folder actions.
-- Find in page through `Ctrl+F` or the Find button.
-- Global keyboard shortcuts for navigation, tabs, bookmarks, downloads, History, private mode, and zoom. They are dispatched from the main Windows message loop and do not require clicking the web page first.
-- Context menu with tab, find, zoom, History, Bookmarks, Downloads, navigation, and data actions, including a WebView2 page-content context-menu integration.
-- Clear browsing data for local History/download records and WebView2 profile data when the installed runtime exposes the profile API.
-- Per-tab zoom controls with `Ctrl++`, `Ctrl+-`, and `Ctrl+0`.
-- Settings for System/Light/Dark theme, tabs, persistent History, session restore, optional update checks, custom title bar, and search-engine selection.
-- A three-dot overflow menu at the right of the address bar contains Find in page, Downloads, Private tab, Settings, Bookmarks, and History. Back, Forward, Refresh, and Home remain on the left.
-- Search options include Google, Bing, DuckDuckGo, Brave Search, Startpage, Mojeek, Swisscows, Yahoo, Baidu, Naver, Yandex, Ecosia, Qwant, Seznam, Ask, AOL, Kagi, MetaGer, SearXNG, You.com, Perplexity, Yep, Sogou, 360 Search, Rambler, Daum, Goo, Excite, Dogpile, Gibiru, WolframAlpha, and a Custom URL mode.
-- Runtime detection with a clear message when Microsoft WebView2 Runtime is unavailable.
-- Optional GitHub release update checker, enabled from Settings or available as a Settings action.
-- Per-user installer with upgrade behavior, Desktop and Start Menu shortcuts, and `/uninstall` support. User data is kept during uninstall.
-- Single-file portable and installer launchers that embed the browser core and `WebView2Loader.dll`.
-- Privacy-oriented profile handling: normal cookies/site data remain available for convenience, private tabs stay isolated, private download records are not persisted, History uses local badges instead of an external favicon service, and Balanced tracking prevention is requested where supported by the installed WebView2 Runtime.
-- WebView2 native commands are accepted only from the internal `about:blank` pages used by Pane Browser; external websites cannot use the internal web-message command channel.
-
-## Keyboard shortcuts
-
-| Shortcut | Action |
-|---|---|
-| `Ctrl+L` | Focus the address bar |
-| `Ctrl+T` | Open a new tab when tabs are enabled, regardless of current focus |
-| `Ctrl+W` | Close the active tab, regardless of current focus |
-| `Ctrl+Shift+T` | Restore the most recently closed normal tab |
-| `Ctrl+Tab` | Activate the next tab |
-| `Ctrl+Shift+Tab` | Activate the previous tab |
-| `Ctrl+R` or `F5` | Refresh the active page |
-| `Ctrl+F` | Find in page |
-| `Ctrl+D` | Add the current page to Bookmarks |
-| `Ctrl+J` | Open Downloads |
-| `Ctrl+H` | Open History |
-| `Ctrl+Shift+P` | Open a private tab |
-| `Ctrl++` / `Ctrl+-` | Zoom in or out |
-| `Ctrl+0` | Reset zoom |
-
-## Local data
-
-Normal application data is stored under:
-
-```text
-%LOCALAPPDATA%\Pane Browser\
-├── history.pbh
-├── bookmarks.pbb
-├── settings.pbs
-├── session.pbs
-├── downloads.pbd
-└── WebView2\
-```
-
-The selected search engine is used for text entered in the address bar; custom URLs may contain `{query}` or `%s`. The `history.pbh` file is created when persistent History is enabled and a normal HTTP(S) navigation is committed. v3 initializes the data directory during startup, before WebView2 is created, so the v2 startup-path defect is addressed. History is capped at 10,000 entries. All record files use escaped UTF-8 fields. Writes use a process-specific temporary file followed by `MoveFileExW` replacement to reduce the chance of a partially written record file, and invalid file-vs-directory paths are rejected.
-
-Private tabs are excluded from normal History and from session restore. Private download records are not persisted. Normal cookies and site data are intentionally retained in the normal WebView2 profile so websites can remember sign-in. Clearing browsing data asks for confirmation, waits for WebView2 completion callbacks, and reports partial failures instead of claiming success unconditionally. Disabling persistent History or session restore removes the corresponding stale local record file.
-
-## Distribution
-
-### Portable
-
-`PaneBrowser-v3.0.0-portable.exe` is one self-extracting portable executable. It contains the browser core and `WebView2Loader.dll`, extracts them into a unique temporary directory at runtime, launches the browser, waits for exit, retries cleanup to allow WebView2 child processes to release files, and reports cleanup only as best-effort.
-
-### Installer
-
-`PaneBrowser-v3.0.0-setup.exe` is one per-user installer executable. It installs the browser under `%LOCALAPPDATA%\Pane Browser`, updates existing files when Pane Browser is closed, and creates Desktop and Start Menu shortcuts. The Start Menu also receives an uninstall shortcut. The installer accepts `/uninstall` and preserves user History and Bookmarks.
-
-Neither launcher bundles the Microsoft WebView2 Runtime. Windows x64 systems must have the Evergreen WebView2 Runtime installed. The runtime can be obtained from the official [Microsoft WebView2 download page](https://developer.microsoft.com/microsoft-edge/webview2/).
-
-## Building from source
-
-The provided `build_v3.sh` script expects MinGW-w64, GNU windres, and the included WebView2 SDK layout. From the project directory:
-
-```bash
-./build_v3.sh
-```
-
-The build creates these generated files:
-
-```text
-PaneBrowserCore.exe
-PaneBrowser-Portable.exe
-PaneBrowser-Setup.exe
-WebView2Loader.dll
-```
-
-`PaneBrowserCore.exe` is the internal browser executable used by the two launchers. For normal distribution, provide the portable launcher or setup launcher instead of the core executable alone.
-
-## Project files
-
-| File | Purpose |
-|---|---|
-| `PaneBrowser.cpp` | Native window, WebView2 controllers, tabs, internal pages, History, Bookmarks, Downloads, Settings, shortcuts, and update checker |
-| `v3_data.h` | Atomic local data files, session records, settings, and path helpers |
-| `single_portable_launcher.cpp` | Single-file portable self-extractor |
-| `single_installer.cpp` | Per-user installer, upgrade path, shortcut creator, and uninstaller mode |
-| `build_v3.sh` | Reproducible MinGW-w64 build script |
-| `EventToken.h` | WebView2 event token definitions required by the included SDK setup |
-| `PaneBrowser.rc` | Application icon resources |
-| `portable_launcher.rc` | Embedded portable payload resources |
-| `installer.rc` | Embedded installer payload resources |
-| `PaneBrowser.ico` | Multi-resolution Windows application icon |
-| `resource_v2.h` | Resource identifiers shared by the launchers |
-| `LICENSE` | MIT License |
-
-## Verification status
-
-The v3 source passes MinGW-w64 syntax and strict warning checks after excluding the expected WebView2 SDK pragma and dynamic Windows API function-pointer casts. The three generated executables are PE32+ Windows x64 GUI files and the launcher resources contain the core and loader payloads. Update checking runs asynchronously so network timeouts do not block the browser UI.
-
-Final WebView2 rendering, downloads, private mode, session restore, custom title-bar hit testing, Windows shortcut creation, runtime detection, and installer upgrade/uninstall behavior must still be exercised on a real Windows x64 system with WebView2 Runtime installed. The project does not claim that Linux cross-compilation replaces that runtime test.
-
-## License
-
-Pane Browser is distributed under the MIT License. See `LICENSE`.
+**Performance / Improvements**
+- The update checker now runs off the UI thread.
+- Balanced tracking prevention is requested at the WebView2 profile level (where the installed Runtime supports it) to reduce common cross-site tracking without deleting first-party cookies or forcing repeated sign-ins.
+- QA: the source and launchers pass strict MinGW-w64 syntax checks with warnings treated as errors (excluding known SDK pragma and dynamic Windows API cast warnings).
